@@ -1,0 +1,9 @@
+dataset/
+visualize/
+pose_code/__pycache__/
+.idea/
+output.avi
+prepared_data/
+src/__pycache__/
+weights/
+images/

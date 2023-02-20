@@ -1,0 +1,16 @@
+# General packages
+numpy
+progress
+torch
+torchvision
+opencv-python
+scikit-image
+transforms3d
+progress
+# SCT packages
+nibabel==4.0.1
+dipy
+portalocker
+onnxruntime
+wquantiles
+
