@@ -14,28 +14,32 @@ def closest_node(node, nodes):
 
 
 # compute prediction L2-error with between predicted and closest real point.
-def mesure_err_disc(gt, pred, dis):
+def mesure_err_disc(gt, pred):
     loss = []
+    dis = []
     for i in range(len(gt[0])):
         node = np.array([gt[0][i], gt[1][i]])
         h = closest_node(node, pred)
         dis.append(np.linalg.norm(node - pred[h]))
+    return dis
 
 
 # compute error along the z axis between real and prediction with the closest node.
-def mesure_err_z(gt, pred, z):
+def mesure_err_z(gt, pred):
+    z = []
     for i in range(len(gt[0])):
         node = np.array([gt[0][i], gt[1][i]])
         h = closest_node(node, pred)
         z.append(abs(node[0] - pred[h][0]))
+    return z
 
 
 # compute False positive by looking at points further than 10 mm from any points or groups of points attributed to same GT points
-def Faux_pos(gt, pred, tot):
+def Faux_pos(gt, pred):
     c = 0
-
+    
     gt = np.transpose(gt)
-    tot.append(len(gt))
+    tot =len(gt)
     already_used = []
     for i in range(len(pred)):
         node = np.array([pred[i][0], pred[i][1]])
@@ -49,7 +53,7 @@ def Faux_pos(gt, pred, tot):
             #print(gt[h])
             #print('already_used')
             c = c + 1
-    return c
+    return c, tot
 
 
 # compute false negative by looking at ground truth point further than 5mm than any predicted point
