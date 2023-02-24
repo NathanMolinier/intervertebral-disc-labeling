@@ -20,6 +20,13 @@ from spinalcordtoolbox.image import Image
 
 #---------------------------Test Sct Label Vertebrae--------------------------
 def test_sct_label_vertebrae(args):
+    '''
+    Use sct_deepseg_sc and sct_label_vertebrae to find the vertebrae discs coordinates and append them
+    to a txt file
+    '''
+    #coords_txt = open('/home/nathanmolinier/data_nvme/code/intervertebral-disc-labeling/prepared_data/coords.txt','a+')
+    #coords_txt.write('subject_name sct_discs_coords hourglass_coords gt_coords')
+    sct_coords = dict()
     datapath = os.path.abspath(args.sct_datapath)
     if args.modality == 't1':
         contrast = 'T1w'
@@ -30,19 +37,28 @@ def test_sct_label_vertebrae(args):
     for dir_name in os.listdir(datapath):
         if dir_name.startswith('sub'):
             file_name = dir_name + '_' + contrast + '.nii.gz'
-            file_path = os.path.join(datapath, dir_name, file_name)
-            sct_deepseg_sc(argv=['-i', file_path, 
-                                '-c', args.modality,
-                                '-o', file_path.replace('.nii.gz', '_seg.nii.gz')])
-            sct_label_vertebrae(argv=['-i', file_path,
-                                    '-s', file_path.replace('.nii.gz', '_seg.nii.gz'),
+            file_path = os.path.join(datapath, dir_name, file_name)  # path to the original image
+            seg_path = file_path.replace('.nii.gz', '_seg.nii.gz')  # path to the spinal cord segmentation
+            if os.path.exists(seg_path):
+                pass
+            else:
+                sct_deepseg_sc(argv=['-i', file_path, 
                                     '-c', args.modality,
-                                    '-ofolder', os.path.join(datapath, dir_name)])
-            # retrieve all labels
-            fname_label = file_path.replace('.nii.gz', '_seg_labeled_discs.nii.gz')
-            coord_labels = Image(fname_label).change_orientation("RPI").getNonZeroCoordinates()
-            print(coord_labels)
-
+                                    '-o', seg_path])
+            
+            disc_file_path = file_path.replace('.nii.gz', '_seg_labeled_discs.nii.gz')  # path to the file with disc labels
+            if os.path.exists(disc_file_path):
+                pass
+            else:
+                sct_label_vertebrae(argv=['-i', file_path,
+                                        '-s', file_path.replace('.nii.gz', '_seg.nii.gz'),
+                                        '-c', args.modality,
+                                        '-ofolder', os.path.join(datapath, dir_name)])
+            # retrieve all disc coords
+            disc_coords = Image(disc_file_path).change_orientation("RPI").getNonZeroCoordinates()
+            subject_name = file_name.replace('.nii.gz', '')
+            sct_coords[subject_name] = disc_coords
+    return sct_coords
 
 #---------------------------Test Hourglass Network----------------------------
 def test_hourglass(args):
@@ -54,6 +70,7 @@ def test_hourglass(args):
          ds = pickle.load(file_pi)
     with open(f'{args.hg_datapath}_{args.modality}_full', 'rb') as file_pi:
          full = pickle.load(file_pi)            
+               
     full[0] = full[0][:, :, :, :, 0]
     
     print('retrieving ground truth coordinates')
@@ -62,16 +79,12 @@ def test_hourglass(args):
     coord_gt = retrieves_gt_coord(ds)
     
     # Initialize metrics
-    global distance_l2
-    global zdis
-    global faux_pos
-    global faux_neg
-    global tot
-    distance_l2 = []
-    zdis = []
-    faux_pos = []
-    faux_neg = []
-    tot = []
+    metrics = dict()
+    metrics['distance_l2'] = []
+    metrics['zdis'] = []
+    metrics['faux_pos'] = []
+    metrics['faux_neg'] = []
+    metrics['tot'] = []
     
     # Load network weights
     if args.att:
@@ -84,12 +97,12 @@ def test_hourglass(args):
         model.load_state_dict(torch.load(f'./weights/model_{args.modality}_stacks_{args.stacks}', map_location='cpu')['model_weights'])
 
     # Create Dataloader
-    full_dataset_test = image_Dataset(image_paths=full[0],target_paths=full[1], use_flip = False)
+    full_dataset_test = image_Dataset(image_paths=full[0],target_paths=full[1], subject_names=full[2], use_flip = False)
     MRI_test_loader   = DataLoader(full_dataset_test, batch_size= 1, shuffle=False, num_workers=0)
     model.eval()
     
     # Get the visualization results of the test set
-    for i, (input, target, vis) in enumerate(MRI_test_loader):
+    for i, (input, target, vis, subject_name) in enumerate(MRI_test_loader):
         input, target = input.to(device), target.to(device, non_blocking=True)
         output = model(input) 
         output = output[-1]
@@ -99,16 +112,17 @@ def test_hourglass(args):
         prediction = np.sum(prediction[0], axis = 0)
         prediction = np.rot90(prediction,3)
         prediction = cv2.resize(prediction, (x.shape[0], x.shape[1]), interpolation=cv2.INTER_NEAREST)
-        prediction_coordinates(prediction, coord_gt[i])
+        prediction_coordinates(prediction, coord_gt[i], metrics)
+        print(subject_name, prediction, coord_gt[i])
 
-    print('distance: l2_median = ' + str(np.median(distance_l2)) + ', l2_std= ' + str(np.std(distance_l2)))
-    print('distance: z_med= ' + str(np.mean(zdis)) + ', z_std= ' + str(np.std(zdis)))
-    print('faux neg (FN) per image ', faux_neg)
-    print('total number of points ' + str(np.sum(tot)))
-    print('number of faux neg (FN) ' + str(np.sum(faux_neg)))
-    print('number of faux pos (FP) ' + str(np.sum(faux_pos)))
-    print('False negative (FN) percentage ' + str(np.sum(faux_neg)/ np.sum(tot)*100))
-    print('False positive (FP) percentage ' + str(np.sum(faux_pos)/ np.sum(tot)*100))
+    print('distance: l2_median = ' + str(np.median(metrics['distance_l2'])) + ', l2_std= ' + str(np.std(metrics['distance_l2'])))
+    print('distance: z_med= ' + str(np.mean(metrics['zdis'])) + ', z_std= ' + str(np.std(metrics['zdis'])))
+    print('faux neg (FN) per image ', metrics['faux_neg'])
+    print('total number of points ' + str(np.sum(metrics['tot'])))
+    print('number of faux neg (FN) ' + str(np.sum(metrics['faux_neg'])))
+    print('number of faux pos (FP) ' + str(np.sum(metrics['faux_pos'])))
+    print('False negative (FN) percentage ' + str(np.sum(metrics['faux_neg'])/ np.sum(metrics['tot'])*100))
+    print('False positive (FP) percentage ' + str(np.sum(metrics['faux_pos'])/ np.sum(metrics['tot'])*100))
 
 ##    
 def extract_skeleton(inputs, outputs, target, Flag_save = False, target_th=0.5):
@@ -182,7 +196,7 @@ def extract_skeleton(inputs, outputs, target, Flag_save = False, target_th=0.5):
     idtest+=1
     return Final
 ##
-def prediction_coordinates(final, coord_gt):
+def prediction_coordinates(final, coord_gt, metrics):
     num_labels, labels_im, states, centers = cv2.connectedComponentsWithStats(np.uint8(np.where(final>0, 255, 0)))
     #centers = peak_local_max(final, min_distance=5, threshold_rel=0.3)
 
@@ -191,13 +205,20 @@ def prediction_coordinates(final, coord_gt):
     for x in centers:
         coordinates.append([x[0], x[1]])
     #print('calculating metrics on image')
-    mesure_err_disc(coord_gt, coordinates, distance_l2)
-    mesure_err_z(coord_gt, coordinates, zdis)
-    fp = Faux_pos(coord_gt, coordinates, tot)
+    l2_dist = mesure_err_disc(coord_gt, coordinates)
+    zdis = mesure_err_z(coord_gt, coordinates)
+    fp, tot = Faux_pos(coord_gt, coordinates)
     fn = Faux_neg(coord_gt, coordinates)
-    faux_pos.append(fp)
-    faux_neg.append(fn)
     
+    metrics['distance_l2'] += l2_dist  # Concatenation des listes
+    metrics['zdis'] += zdis  # Concatenation des listes
+    metrics['tot'].append(tot)
+    metrics['faux_pos'].append(fp)
+    metrics['faux_neg'].append(fn)
+    
+def compare_methods():
+    return
+
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Verterbal disc labeling using pose estimation')
 
@@ -220,7 +241,5 @@ if __name__=='__main__':
     parser.add_argument('-b', '--blocks', default=1, type=int, metavar='N',
                         help='Number of residual modules at each location in the hourglass')
 
-    test_sct_label_vertebrae(parser.parse_args())
-    #test_hourglass(parser.parse_args())
-    #print(parser.parse_args())
-    #print(type(parser.parse_args()))
+    # test_sct_label_vertebrae(parser.parse_args())
+    test_hourglass(parser.parse_args())
