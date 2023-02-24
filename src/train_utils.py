@@ -13,6 +13,7 @@ import skimage
 import cv2
 from scipy import signal
 import torch 
+import os
 
 
 
@@ -122,12 +123,38 @@ def extract_groundtruth_heatmap(DataSet):
     tmp_train_img = np.expand_dims(train_ds_img, axis=-1)
     return [tmp_train_img, tmp_train_labels]
 
+def extract_groundtruth_heatmap_with_subjects(DataSet):
+    """
+    Loop across images to create the dataset of groundtruth and images to input for training
+    :param DataSet: An array containing [images, GT corrdinates]
+    :return: an array containing [image, heatmap]
+    """
+    [train_ds_img, train_ds_label, subjects_list] = DataSet
+
+    tmp_train_labels = [0 for i in range(len(train_ds_label))]
+    tmp_train_img = [0 for i in range(len(train_ds_label))]
+    train_ds_img = np.array(train_ds_img)
+
+    for i in range(len(train_ds_label)):
+        final = extract_all(train_ds_label[i], shape_im=train_ds_img[0].shape)
+        tmp_train_labels[i] = normalize(final[0, :, :])
+
+    tmp_train_labels = np.array(tmp_train_labels)
+
+    for i in range(len(train_ds_img)):
+        print(train_ds_img[i].shape)
+        tmp_train_img[i] = (normalize(train_ds_img[i][:, :, 0]))
+
+    tmp_train_labels = np.expand_dims(tmp_train_labels, axis=-1)
+    tmp_train_img = np.expand_dims(train_ds_img, axis=-1)
+    return [tmp_train_img, tmp_train_labels, subjects_list]
 
 class image_Dataset(Dataset):
-    def __init__(self, image_paths, target_paths, use_flip = True):  # initial logic happens like transform
+    def __init__(self, image_paths, target_paths, subject_names = None, use_flip = True):  # initial logic happens like transform
 
         self.image_paths = image_paths
         self.target_paths = target_paths
+        self.subject_names = subject_names
         self.num_vis_joints = []
         self.use_flip = use_flip
 
@@ -229,7 +256,11 @@ class image_Dataset(Dataset):
         t_image, t_mask = self.transform(image, mask)
         
         vis = torch.FloatTensor(vis)
-        return t_image, t_mask, vis
+        if self.subject_names == None:
+            return t_image, t_mask, vis
+        else:
+            subject_name = self.subject_names[index]
+            return t_image, t_mask, vis, subject_name
 
     def __len__(self):  # return count of sample we have
         
