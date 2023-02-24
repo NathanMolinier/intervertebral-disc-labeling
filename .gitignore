@@ -7,3 +7,4 @@ prepared_data/
 src/__pycache__/
 weights/
 images/
+.vscode/
