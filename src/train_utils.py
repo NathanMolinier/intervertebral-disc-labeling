@@ -123,7 +123,7 @@ def extract_groundtruth_heatmap(DataSet):
     tmp_train_img = np.expand_dims(train_ds_img, axis=-1)
     return [tmp_train_img, tmp_train_labels]
 
-def extract_groundtruth_heatmap_with_subjects(DataSet):
+def extract_groundtruth_heatmap_with_subjects_and_GT_coords(DataSet):
     """
     Loop across images to create the dataset of groundtruth and images to input for training
     :param DataSet: An array containing [images, GT corrdinates]
@@ -147,13 +147,14 @@ def extract_groundtruth_heatmap_with_subjects(DataSet):
 
     tmp_train_labels = np.expand_dims(tmp_train_labels, axis=-1)
     tmp_train_img = np.expand_dims(train_ds_img, axis=-1)
-    return [tmp_train_img, tmp_train_labels, subjects_list]
+    return [tmp_train_img, tmp_train_labels, train_ds_label, subjects_list]
 
 class image_Dataset(Dataset):
-    def __init__(self, image_paths, target_paths, subject_names = None, use_flip = True):  # initial logic happens like transform
+    def __init__(self, image_paths, target_paths, gt_coords, subject_names = None, use_flip = True):  # initial logic happens like transform
 
         self.image_paths = image_paths
         self.target_paths = target_paths
+        self.gt_coords = gt_coords
         self.subject_names = subject_names
         self.num_vis_joints = []
         self.use_flip = use_flip
@@ -260,7 +261,8 @@ class image_Dataset(Dataset):
             return t_image, t_mask, vis
         else:
             subject_name = self.subject_names[index]
-            return t_image, t_mask, vis, subject_name
+            gt_coord = self.gt_coords[index]
+            return t_image, t_mask, vis, gt_coord, subject_name
 
     def __len__(self):  # return count of sample we have
         
