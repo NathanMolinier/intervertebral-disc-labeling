@@ -1,4 +1,5 @@
 import torch
+from torchvision.utils import save_image
 from test import retrieves_gt_coord, prediction_coordinates, check_skeleton, save_test_results
 from pose_code.hourglass import hg
 from pose_code.atthourglass import atthg
@@ -66,17 +67,21 @@ def test_hourglass(args):
     
     print('load image')
     # Put image into an array
-    with open(f'{args.hg_datapath}_{args.modality}_ds',   'rb') as file_pi:       
-         ds = pickle.load(file_pi)
-    with open(f'{args.hg_datapath}_{args.modality}_full', 'rb') as file_pi:
-         full = pickle.load(file_pi)            
-               
+    # with open(f'{args.hg_datapath}_{args.modality}_ds',   'rb') as file_pi:     
+    #     ds = pickle.load(file_pi)
+    # with open(f'{args.hg_datapath}_{args.modality}_full', 'rb') as file_pi:
+    #     full = pickle.load(file_pi)
+                    
+    with open(f'{args.hg_datapath}_test_{args.modality}', 'rb') as file_pi:
+        full = pickle.load(file_pi)            
+    
     full[0] = full[0][:, :, :, :, 0]
+    coord_gt = retrieves_gt_coord(full[2])
     
     print('retrieving ground truth coordinates')
     global norm_mean_skeleton
     norm_mean_skeleton = np.load(f'./prepared_data/{args.modality}_Skelet.npy')
-    coord_gt = retrieves_gt_coord(ds)
+    #coord_gt = retrieves_gt_coord(ds) # [[182, 160, 139, 119, 100, 77, 57, 34, 9], [167, 167, 166, 164, 160, 155, 143, 129, 116]]
     
     # Initialize metrics
     metrics = dict()
@@ -97,12 +102,12 @@ def test_hourglass(args):
         model.load_state_dict(torch.load(f'./weights/model_{args.modality}_stacks_{args.stacks}', map_location='cpu')['model_weights'])
 
     # Create Dataloader
-    full_dataset_test = image_Dataset(image_paths=full[0],target_paths=full[1], subject_names=full[2], use_flip = False)
+    full_dataset_test = image_Dataset(image_paths=full[0],target_paths=full[1], gt_coords=coord_gt, subject_names=full[3], use_flip = False) 
     MRI_test_loader   = DataLoader(full_dataset_test, batch_size= 1, shuffle=False, num_workers=0)
     model.eval()
     
     # Get the visualization results of the test set
-    for i, (input, target, vis, subject_name) in enumerate(MRI_test_loader):
+    for i, (input, target, vis, gt_coord, subject_name) in enumerate(MRI_test_loader): # subject_name
         input, target = input.to(device), target.to(device, non_blocking=True)
         output = model(input) 
         output = output[-1]
@@ -112,8 +117,8 @@ def test_hourglass(args):
         prediction = np.sum(prediction[0], axis = 0)
         prediction = np.rot90(prediction,3)
         prediction = cv2.resize(prediction, (x.shape[0], x.shape[1]), interpolation=cv2.INTER_NEAREST)
-        prediction_coordinates(prediction, coord_gt[i], metrics)
-        print(subject_name, prediction, coord_gt[i])
+        prediction_coordinates(prediction, gt_coord, metrics)
+        
 
     print('distance: l2_median = ' + str(np.median(metrics['distance_l2'])) + ', l2_std= ' + str(np.std(metrics['distance_l2'])))
     print('distance: z_med= ' + str(np.mean(metrics['zdis'])) + ', z_std= ' + str(np.std(metrics['zdis'])))
