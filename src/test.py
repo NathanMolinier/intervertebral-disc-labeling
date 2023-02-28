@@ -25,15 +25,15 @@ from skimage.feature import peak_local_max
 ## Functions from neuropoly
 def retrieves_gt_coord(ds):
     coord_retrieved = []
-    for i in range(len(ds[1])):
+    for i in range(len(ds)):
         coord_tmp = [[], []]
-        for j in range(len(ds[1][i])):
-            if ds[1][i][j][3] == 1 or ds[1][i][j][3] > 30:
-                print('remove' + str(ds[1][i][j][3]))
+        for j in range(len(ds[i])):
+            if ds[i][j][3] == 1 or ds[i][j][3] > 30:
+                print('remove' + str(ds[i][j][3]))
                 pass
             else:
-                coord_tmp[0].append(ds[1][i][j][2])
-                coord_tmp[1].append(ds[1][i][j][1])
+                coord_tmp[0].append(ds[i][j][2])
+                coord_tmp[1].append(ds[i][j][1])
         coord_retrieved.append(coord_tmp)
     return (coord_retrieved)
     
