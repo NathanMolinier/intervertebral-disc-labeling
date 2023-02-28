@@ -5,8 +5,8 @@
 
 import sys
 sys.path.append(r'/home/nathanmolinier/data_nvme/code/spinalcordtoolbox')
-from Data2array import *
-from train_utils import *
+from Data2array import load_Data_Bids2Array, load_Data_Bids2Array_with_subjects
+from train_utils import extract_groundtruth_heatmap, extract_groundtruth_heatmap_with_subjects_and_GT_coords
 #from models import *
 import numpy as np
 import copy
@@ -25,10 +25,10 @@ args = parser.parse_args()
                         
 print('load dataset')
 ds_train = load_Data_Bids2Array(args.source, mode= args.mode, split='train', aim='full')
-ds_test = load_Data_Bids2Array_with_subjects(args.source, mode= args.mode, split='test', aim='full')
+ds_test = load_Data_Bids2Array_with_subjects(args.source, mode= args.mode, split='test', aim='full')  # we want to keep track of the subjects name
 print('creating heatmap')
 full_train = extract_groundtruth_heatmap(ds_train)
-full_test = extract_groundtruth_heatmap_with_subjects(ds_test)
+full_test = extract_groundtruth_heatmap_with_subjects_and_GT_coords(ds_test)  # we want to keep track of the subjects name and the ground truth position of the vertebral discs
 print('saving the prepared dataset')
 if args.mode == 0:
      modality = 't1_t2'
