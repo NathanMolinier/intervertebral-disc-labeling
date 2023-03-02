@@ -283,13 +283,13 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Verterbal disc labeling using pose estimation')
 
     ## Parameters
-    parser.add_argument('--hg_datapath', type=str, required=True,
+    parser.add_argument('--hg_datapath', type=str,
                         help='Hourglass dataset path')                               
-    parser.add_argument('--sct_datapath', type=str, required=True,
+    parser.add_argument('--sct_datapath', type=str,
                         help='SCT dataset path')                               
     parser.add_argument('-c', '--modality', type=str, metavar='N', required=True,
                         help='Data modality')
-    parser.add_argument('--compare_methods', default=False, type=str, metavar='N', required=True,
+    parser.add_argument('--compare_methods', default=False, type=str, metavar='N',
                         help='Data modality')                                                                                                
 
     parser.add_argument('--njoints', default=11, type=int,
