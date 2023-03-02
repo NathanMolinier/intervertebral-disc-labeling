@@ -146,7 +146,7 @@ def load_Data_Bids2Array(DataSet_path, mode=0, split='train', aim='full'):
         begin = int(np.round(all_file * 0.95))
         end = int(np.round(all_file * 1))
     for i in range(begin, end):
-        path_tmp = DataSet_path + list_dir[i] + '/'
+        path_tmp = os.path.join(DataSet_path,list_dir[i]) + '/'
 
         if mode != 2:
             if os.path.exists(path_tmp + list_dir[i]+'_T1w_labels-disc-manual.nii.gz'):
@@ -247,7 +247,7 @@ def load_Data_Bids2Array_with_subjects(DataSet_path, mode=0, split='train', aim=
         begin = int(np.round(all_file * 0.95))
         end = int(np.round(all_file * 1))
     for i in range(begin, end):
-        path_tmp = DataSet_path + list_dir[i] + '/'
+        path_tmp = os.path.join(DataSet_path,list_dir[i]) + '/'
         subjects_list.append(list_dir[i])
 
         if mode != 2:
