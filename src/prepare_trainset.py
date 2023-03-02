@@ -12,6 +12,7 @@ import numpy as np
 import copy
 import pickle
 import argparse
+import os
 
 parser = argparse.ArgumentParser(description='PyTorch arguments')
 parser.add_argument('--source', type=str,
@@ -23,7 +24,7 @@ parser.add_argument('--mode', default=2, type=int,
                         
 args = parser.parse_args()                        
                         
-print('load dataset')
+print('load dataset: ',os.path.abspath(args.source))
 ds_train = load_Data_Bids2Array(args.source, mode= args.mode, split='train', aim='full')
 ds_test = load_Data_Bids2Array_with_subjects(args.source, mode= args.mode, split='test', aim='full')  # we want to keep track of the subjects name
 print('creating heatmap')
