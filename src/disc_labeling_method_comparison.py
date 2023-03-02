@@ -25,9 +25,11 @@ def test_sct_label_vertebrae(args):
     Use sct_deepseg_sc and sct_label_vertebrae to find the vertebrae discs coordinates and append them
     to a txt file
     '''
-    #coords_txt = open('/home/nathanmolinier/data_nvme/code/intervertebral-disc-labeling/prepared_data/coords.txt','a+')
-    #coords_txt.write('subject_name sct_discs_coords hourglass_coords gt_coords')
-    sct_coords = dict()
+    with open("prepared_data/discs_coords.txt","r") as f:  # Checking already processed subjects from coords.txt
+        file_lines = f.readlines()
+        processed_subjects_with_contrast = [line.split(' ')[0] + '_' + line.split(' ')[1] for line in file_lines[1:]]  # Remove first line
+        
+    #sct_coords = dict()
     datapath = os.path.abspath(args.sct_datapath)
     if args.modality == 't1':
         contrast = 'T1w'
@@ -56,22 +58,34 @@ def test_sct_label_vertebrae(args):
                                         '-c', args.modality,
                                         '-ofolder', os.path.join(datapath, dir_name)])
             # retrieve all disc coords
-            disc_coords = Image(disc_file_path).change_orientation("RPI").getNonZeroCoordinates()
-            subject_name = file_name.replace('.nii.gz', '')
-            sct_coords[subject_name] = disc_coords
-    return sct_coords
+            discs_coords = Image(disc_file_path).change_orientation("RPI").getNonZeroCoordinates()
+            subject_name = dir_name
+            
+            if (subject_name + '_' + contrast) not in processed_subjects_with_contrast:
+                lines = [subject_name + ' ' + contrast + ' ' + str(disc_num + 1) + ' ' + 'None' + ' ' + 'None' + ' ' + 'None' + '\n' for disc_num in range(11)] # To reorder the discs
+                for coord in discs_coords:
+                    coord_list = str(coord).split(',')
+                    disc_num = int(float(coord_list[-1]))
+                    coord_2d = '[' + str(coord_list[2]) + ',' + str(coord_list[1]) + ']'#  2D comparison of the models
+                    lines[disc_num-1] = subject_name + ' ' + contrast + ' ' + str(disc_num) + ' ' + coord_2d + ' ' + 'None' + ' ' + 'None' + '\n'
+                    
+                with open("prepared_data/discs_coords.txt","a") as f:
+                    f.writelines(lines)
+            #sct_coords[subject_name] = discs_coords
+    #return sct_coords
 
 #---------------------------Test Hourglass Network----------------------------
 def test_hourglass(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    print('load image')
-    # Put image into an array
-    # with open(f'{args.hg_datapath}_{args.modality}_ds',   'rb') as file_pi:     
-    #     ds = pickle.load(file_pi)
-    # with open(f'{args.hg_datapath}_{args.modality}_full', 'rb') as file_pi:
-    #     full = pickle.load(file_pi)
-                    
+    if args.modality == 't1':
+        contrast = 'T1w'
+    elif args.modality == 't2':
+        contrast = 'T2w'
+    elif args.modality == 't2s':
+        contrast = 'T2star'
+        
+    print('load image')               
     with open(f'{args.hg_datapath}_test_{args.modality}', 'rb') as file_pi:
         full = pickle.load(file_pi)            
     
@@ -102,9 +116,14 @@ def test_hourglass(args):
         model.load_state_dict(torch.load(f'./weights/model_{args.modality}_stacks_{args.stacks}', map_location='cpu')['model_weights'])
 
     # Create Dataloader
-    full_dataset_test = image_Dataset(image_paths=full[0],target_paths=full[1], gt_coords=coord_gt, subject_names=full[3], use_flip = False) 
+    full_dataset_test = image_Dataset(image_paths=full[0],target_paths=full[1], gt_coords=full[2], subject_names=full[3], use_flip = False) 
     MRI_test_loader   = DataLoader(full_dataset_test, batch_size= 1, shuffle=False, num_workers=0)
     model.eval()
+    
+    # Load disc_coords txt file
+    with open("prepared_data/discs_coords.txt","r") as f:  # Checking already processed subjects from coords.txt
+        file_lines = f.readlines()
+        split_lines = [line.split(' ') for line in file_lines]
     
     # Get the visualization results of the test set
     for i, (input, target, vis, gt_coord, subject_name) in enumerate(MRI_test_loader): # subject_name
@@ -117,17 +136,40 @@ def test_hourglass(args):
         prediction = np.sum(prediction[0], axis = 0)
         prediction = np.rot90(prediction,3)
         prediction = cv2.resize(prediction, (x.shape[0], x.shape[1]), interpolation=cv2.INTER_NEAREST)
-        prediction_coordinates(prediction, gt_coord, metrics)
+        num_labels, labels_im, states, centers = cv2.connectedComponentsWithStats(np.uint8(np.where(prediction>0, 255, 0)))
+
+        
+        # Write the predicted and ground truth coordinates inside the discs_coords txt file
+        gt_coord = torch.tensor(gt_coord).tolist()
+        subject_index = np.where((np.array(split_lines)[:,0] == subject_name[0]) & (np.array(split_lines)[:,1] == contrast)) 
+        nb_discs_gt = len(gt_coord) 
+        start_index = subject_index[0][0]  # Getting the first line in the txt file
+        centers = centers[-centers[:, 0].argsort()]  # Sorting centers according to first coordinate
+        if nb_discs_gt != centers.shape[0]:
+            print('Hourglass found more discs than ground truth')
+        else:
+            for i in range(len(gt_coord)):
+                num_disc = gt_coord[i][-1]
+                split_lines[start_index + (num_disc-1)][4] = '[' + str("{:.1f}".format(centers[i][0])) + ',' + str("{:.1f}".format(centers[i][1])) + ']'
+                split_lines[start_index + (num_disc-1)][5] = '[' + str(gt_coord[i][2]) + ',' + str(gt_coord[i][1]) + ']' + '\n'  # [31, 176, 204, 2] --> [204,176]
+            
+            for num in range(len(split_lines)):
+                file_lines[num] = ' '.join(split_lines[num])
+                
+            with open("prepared_data/discs_coords.txt","w") as f:
+                f.writelines(file_lines)  
+        
+        # prediction_coordinates(prediction, gt_coord, metrics)
         
 
-    print('distance: l2_median = ' + str(np.median(metrics['distance_l2'])) + ', l2_std= ' + str(np.std(metrics['distance_l2'])))
-    print('distance: z_med= ' + str(np.mean(metrics['zdis'])) + ', z_std= ' + str(np.std(metrics['zdis'])))
-    print('faux neg (FN) per image ', metrics['faux_neg'])
-    print('total number of points ' + str(np.sum(metrics['tot'])))
-    print('number of faux neg (FN) ' + str(np.sum(metrics['faux_neg'])))
-    print('number of faux pos (FP) ' + str(np.sum(metrics['faux_pos'])))
-    print('False negative (FN) percentage ' + str(np.sum(metrics['faux_neg'])/ np.sum(metrics['tot'])*100))
-    print('False positive (FP) percentage ' + str(np.sum(metrics['faux_pos'])/ np.sum(metrics['tot'])*100))
+    # print('distance: l2_median = ' + str(np.median(metrics['distance_l2'])) + ', l2_std= ' + str(np.std(metrics['distance_l2'])))
+    # print('distance: z_med= ' + str(np.mean(metrics['zdis'])) + ', z_std= ' + str(np.std(metrics['zdis'])))
+    # print('faux neg (FN) per image ', metrics['faux_neg'])
+    # print('total number of points ' + str(np.sum(metrics['tot'])))
+    # print('number of faux neg (FN) ' + str(np.sum(metrics['faux_neg'])))
+    # print('number of faux pos (FP) ' + str(np.sum(metrics['faux_pos'])))
+    # print('False negative (FN) percentage ' + str(np.sum(metrics['faux_neg'])/ np.sum(metrics['tot'])*100))
+    # print('False positive (FP) percentage ' + str(np.sum(metrics['faux_pos'])/ np.sum(metrics['tot'])*100))
 
 ##    
 def extract_skeleton(inputs, outputs, target, Flag_save = False, target_th=0.5):
@@ -245,6 +287,10 @@ if __name__=='__main__':
                         help='Number of hourglasses to stack')
     parser.add_argument('-b', '--blocks', default=1, type=int, metavar='N',
                         help='Number of residual modules at each location in the hourglass')
+    
+    if not os.path.exists('prepared_data/discs_coords.txt'):
+        with open("prepared_data/discs_coords.txt","w") as f:
+            f.write("subject_name contrast num_disc sct_discs_coords hourglass_coords gt_coords\n")
 
-    # test_sct_label_vertebrae(parser.parse_args())
+    test_sct_label_vertebrae(parser.parse_args())
     test_hourglass(parser.parse_args())
