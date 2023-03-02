@@ -58,17 +58,30 @@ def test_sct_label_vertebrae(args):
                                         '-c', args.modality,
                                         '-ofolder', os.path.join(datapath, dir_name)])
             # retrieve all disc coords
-            discs_coords = Image(disc_file_path).change_orientation("RPI").getNonZeroCoordinates()
+            discs_coords = Image(disc_file_path).change_orientation("RPI").getNonZeroCoordinates(sorting='value')
             subject_name = dir_name
             
             if (subject_name + '_' + contrast) not in processed_subjects_with_contrast:
                 lines = [subject_name + ' ' + contrast + ' ' + str(disc_num + 1) + ' ' + 'None' + ' ' + 'None' + ' ' + 'None' + '\n' for disc_num in range(11)] # To reorder the discs
+                last_referred_disc = 0
                 for coord in discs_coords:
                     coord_list = str(coord).split(',')
                     disc_num = int(float(coord_list[-1]))
                     coord_2d = '[' + str(coord_list[2]) + ',' + str(coord_list[1]) + ']'#  2D comparison of the models
-                    lines[disc_num-1] = subject_name + ' ' + contrast + ' ' + str(disc_num) + ' ' + coord_2d + ' ' + 'None' + ' ' + 'None' + '\n'
-                    
+                    if disc_num > 11:
+                        print('More than 11 discs are visible')
+                        print('Disc number', disc_num)
+                        if disc_num == last_referred_disc + 1:  # Check if all the previous discs were also implemented
+                            lines.append(subject_name + ' ' + contrast + ' ' + str(disc_num) + ' ' + coord_2d + ' ' + 'None' + ' ' + 'None' + '\n')
+                            last_referred_disc = disc_num
+                        else:
+                            for i in range(disc_num - last_referred_disc - 1):
+                                lines.append(subject_name + ' ' + contrast + ' ' + str(last_referred_disc + 1 + i) + ' ' + 'None' + ' ' + 'None' + ' ' + 'None' + '\n')
+                            lines.append(subject_name + ' ' + contrast + ' ' + str(disc_num) + ' ' + coord_2d + ' ' + 'None' + ' ' + 'None' + '\n')
+                            last_referred_disc = disc_num
+                    else:
+                        lines[disc_num-1] = subject_name + ' ' + contrast + ' ' + str(disc_num) + ' ' + coord_2d + ' ' + 'None' + ' ' + 'None' + '\n'
+                        last_referred_disc = disc_num
                 with open("prepared_data/discs_coords.txt","a") as f:
                     f.writelines(lines)
             #sct_coords[subject_name] = discs_coords
@@ -275,6 +288,8 @@ if __name__=='__main__':
     parser.add_argument('--sct_datapath', type=str, required=True,
                         help='SCT dataset path')                               
     parser.add_argument('-c', '--modality', type=str, metavar='N', required=True,
+                        help='Data modality')
+    parser.add_argument('--compare_methods', default=False, type=str, metavar='N', required=True,
                         help='Data modality')                                                                                                
 
     parser.add_argument('--njoints', default=11, type=int,
@@ -288,9 +303,12 @@ if __name__=='__main__':
     parser.add_argument('-b', '--blocks', default=1, type=int, metavar='N',
                         help='Number of residual modules at each location in the hourglass')
     
-    if not os.path.exists('prepared_data/discs_coords.txt'):
-        with open("prepared_data/discs_coords.txt","w") as f:
-            f.write("subject_name contrast num_disc sct_discs_coords hourglass_coords gt_coords\n")
+    if parser.parse_args().compare_methods:
+        compare_methods()
+    else:
+        if not os.path.exists('prepared_data/discs_coords.txt'):
+            with open("prepared_data/discs_coords.txt","w") as f:
+                f.write("subject_name contrast num_disc sct_discs_coords hourglass_coords gt_coords\n")
 
-    test_sct_label_vertebrae(parser.parse_args())
-    test_hourglass(parser.parse_args())
+        test_sct_label_vertebrae(parser.parse_args())
+        test_hourglass(parser.parse_args())
