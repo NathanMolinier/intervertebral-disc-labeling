@@ -101,18 +101,18 @@ def main(args):
     if args.resume:
        print("=> loading checkpoint to continue learing process")
        if args.att:
-            model.load_state_dict(torch.load(f'../weights/model_{args.modality}_att_stacks_{args.stacks}', map_location='cpu')['model_weights'])
+            model.load_state_dict(torch.load(f'weights/model_{args.modality}_att_stacks_{args.stacks}', map_location='cpu')['model_weights'])
        else:
-            model.load_state_dict(torch.load(f'../weights/model_{args.modality}_stacks_{args.stacks}', map_location='cpu')['model_weights'])
+            model.load_state_dict(torch.load(f'weights/model_{args.modality}_stacks_{args.stacks}', map_location='cpu')['model_weights'])
 
     # evaluation only
     if args.evaluate:
         print('\nEvaluation only')
         print('loading the pretrained weight')
         if args.att:
-            model.load_state_dict(torch.load(f'../weights/model_{args.modality}_att_stacks_{args.stacks}', map_location='cpu')['model_weights'])
+            model.load_state_dict(torch.load(f'weights/model_{args.modality}_att_stacks_{args.stacks}', map_location='cpu')['model_weights'])
         else:
-            model.load_state_dict(torch.load(f'../weights/model_{args.modality}_stacks_{args.stacks}', map_location='cpu')['model_weights'])
+            model.load_state_dict(torch.load(f'weights/model_{args.modality}_stacks_{args.stacks}', map_location='cpu')['model_weights'])
 
         if args.attshow:
             loss, acc = show_attention(MRI_val_loader, model)
@@ -141,9 +141,9 @@ def main(args):
         if valid_acc > best_acc:
            state = copy.deepcopy({'model_weights': model.state_dict()})
            if args.att:
-                torch.save(state, f'../weights/model_{args.modality}_att_stacks_{args.stacks}')
+                torch.save(state, f'weights/model_{args.modality}_att_stacks_{args.stacks}')
            else:
-                torch.save(state, f'../weights/model_{args.modality}_stacks_{args.stacks}')
+                torch.save(state, f'weights/model_{args.modality}_stacks_{args.stacks}')
            best_acc = valid_acc
                 
 
@@ -306,7 +306,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Verterbal disc labeling using pose estimation')
     
     ## Parameters
-    parser.add_argument('--datapath', default='../prepared_data/prepared_trainset_t1', type=str,
+    parser.add_argument('--datapath', type=str,
                         help='Dataset address')                     
     parser.add_argument('--njoints', default=11, type=int,
                         help='Number of joints')
@@ -316,7 +316,7 @@ if __name__ == '__main__':
                         help=' Show the attention map') 
     parser.add_argument('--epochs', default=120, type=int, metavar='N',
                         help='number of total epochs to run')
-    parser.add_argument('--modality', default='t1', type=str, metavar='N',
+    parser.add_argument('--modality', type=str, metavar='N',
                         help='Data modality')
     parser.add_argument('--train_batch', default=3, type=int, metavar='N', 
                         help='train batchsize')
