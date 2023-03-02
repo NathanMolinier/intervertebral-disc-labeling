@@ -19,6 +19,11 @@ from spinalcordtoolbox.scripts.sct_label_vertebrae import main as sct_label_vert
 from spinalcordtoolbox.scripts.sct_deepseg_sc import main as sct_deepseg_sc
 from spinalcordtoolbox.image import Image
 
+global CONTRAST
+CONTRAST = {'t1': 'T1w',
+            't2': 'T2w',
+            't2s':'T2star'}
+
 #---------------------------Test Sct Label Vertebrae--------------------------
 def test_sct_label_vertebrae(args):
     '''
@@ -31,12 +36,7 @@ def test_sct_label_vertebrae(args):
         
     #sct_coords = dict()
     datapath = os.path.abspath(args.sct_datapath)
-    if args.modality == 't1':
-        contrast = 'T1w'
-    elif args.modality == 't2':
-        contrast = 'T2w'
-    elif args.modality == 't2s':
-        contrast = 'T2star'
+    contrast = CONTRAST[args.modality]
     for dir_name in os.listdir(datapath):
         if dir_name.startswith('sub'):
             file_name = dir_name + '_' + contrast + '.nii.gz'
@@ -90,14 +90,8 @@ def test_sct_label_vertebrae(args):
 #---------------------------Test Hourglass Network----------------------------
 def test_hourglass(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    contrast = CONTRAST[args.modality]
     
-    if args.modality == 't1':
-        contrast = 'T1w'
-    elif args.modality == 't2':
-        contrast = 'T2w'
-    elif args.modality == 't2s':
-        contrast = 'T2star'
-        
     print('load image')               
     with open(f'{args.hg_datapath}_test_{args.modality}', 'rb') as file_pi:
         full = pickle.load(file_pi)            
@@ -276,7 +270,8 @@ def prediction_coordinates(final, coord_gt, metrics):
     metrics['faux_pos'].append(fp)
     metrics['faux_neg'].append(fn)
     
-def compare_methods():
+def compare_methods(args):
+    
     return
 
 if __name__=='__main__':
@@ -289,7 +284,7 @@ if __name__=='__main__':
                         help='SCT dataset path')                               
     parser.add_argument('-c', '--modality', type=str, metavar='N', required=True,
                         help='Data modality')
-    parser.add_argument('--compare_methods', default=False, type=str, metavar='N',
+    parser.add_argument('-txt', '--comp_txt_file', default=None, type=str, metavar='N',
                         help='Data modality')                                                                                                
 
     parser.add_argument('--njoints', default=11, type=int,
@@ -303,8 +298,8 @@ if __name__=='__main__':
     parser.add_argument('-b', '--blocks', default=1, type=int, metavar='N',
                         help='Number of residual modules at each location in the hourglass')
     
-    if parser.parse_args().compare_methods:
-        compare_methods()
+    if parser.parse_args().comp_txt_file != None:
+        compare_methods(parser.parse_args())
     else:
         if not os.path.exists('prepared_data/discs_coords.txt'):
             with open("prepared_data/discs_coords.txt","w") as f:
