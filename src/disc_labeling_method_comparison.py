@@ -14,10 +14,8 @@ from Metrics import mesure_err_disc, mesure_err_z, Faux_neg, Faux_pos
 from sklearn.utils.extmath import cartesian
 import os
 
-sys.path.append(r'/home/nathanmolinier/data_nvme/code/spinalcordtoolbox')
-from spinalcordtoolbox.scripts.sct_label_vertebrae import main as sct_label_vertebrae
-from spinalcordtoolbox.scripts.sct_deepseg_sc import main as sct_deepseg_sc
 from spinalcordtoolbox.image import Image
+from spinalcordtoolbox.utils.sys import run_proc
 
 global CONTRAST
 CONTRAST = {'t1': 'T1w',
@@ -45,43 +43,56 @@ def test_sct_label_vertebrae(args):
             if os.path.exists(seg_path):
                 pass
             else:
-                sct_deepseg_sc(argv=['-i', file_path, 
-                                    '-c', args.modality,
-                                    '-o', seg_path])
+                status, _ = run_proc(['sct_deepseg_sc',
+                                        '-i', file_path, 
+                                        '-c', args.modality,
+                                        '-o', seg_path])
+                if status != 0:
+                    print('Fail segmentation')
+                    discs_coords = 'Fail'
             
             disc_file_path = file_path.replace('.nii.gz', '_seg_labeled_discs.nii.gz')  # path to the file with disc labels
             if os.path.exists(disc_file_path):
-                pass
+                # retrieve all disc coords
+                discs_coords = Image(disc_file_path).change_orientation("RPI").getNonZeroCoordinates(sorting='value')
             else:
-                sct_label_vertebrae(argv=['-i', file_path,
-                                        '-s', file_path.replace('.nii.gz', '_seg.nii.gz'),
-                                        '-c', args.modality,
-                                        '-ofolder', os.path.join(datapath, dir_name)])
-            # retrieve all disc coords
-            discs_coords = Image(disc_file_path).change_orientation("RPI").getNonZeroCoordinates(sorting='value')
+                status, _ = run_proc(['sct_label_vertebrae',
+                                            '-i', file_path,
+                                            '-s', file_path.replace('.nii.gz', '_seg.nii.gz'),
+                                            '-c', args.modality,
+                                            '-ofolder', os.path.join(datapath, dir_name)], raise_exception=False)
+                if status == 0:
+                    discs_coords = Image(disc_file_path).change_orientation("RPI").getNonZeroCoordinates(sorting='value')
+                else:
+                    print('Exit value 1')
+                    print('Fail sct_label_vertebrae')
+                    discs_coords = 'Fail'
+
             subject_name = dir_name
-            
             if (subject_name + '_' + contrast) not in processed_subjects_with_contrast:
-                lines = [subject_name + ' ' + contrast + ' ' + str(disc_num + 1) + ' ' + 'None' + ' ' + 'None' + ' ' + 'None' + '\n' for disc_num in range(11)] # To reorder the discs
-                last_referred_disc = 0
-                for coord in discs_coords:
-                    coord_list = str(coord).split(',')
-                    disc_num = int(float(coord_list[-1]))
-                    coord_2d = '[' + str(coord_list[2]) + ',' + str(coord_list[1]) + ']'#  2D comparison of the models
-                    if disc_num > 11:
-                        print('More than 11 discs are visible')
-                        print('Disc number', disc_num)
-                        if disc_num == last_referred_disc + 1:  # Check if all the previous discs were also implemented
-                            lines.append(subject_name + ' ' + contrast + ' ' + str(disc_num) + ' ' + coord_2d + ' ' + 'None' + ' ' + 'None' + '\n')
-                            last_referred_disc = disc_num
+                if discs_coords == 'Fail':  # SCT method error
+                    lines = [subject_name + ' ' + contrast + ' ' + str(disc_num + 1) + ' ' + 'Fail' + ' ' + 'None' + ' ' + 'None' + '\n' for disc_num in range(11)] # To reorder the discs
+                else:
+                    lines = [subject_name + ' ' + contrast + ' ' + str(disc_num + 1) + ' ' + 'None' + ' ' + 'None' + ' ' + 'None' + '\n' for disc_num in range(11)] # To reorder the discs
+                    last_referred_disc = 0
+                    for coord in discs_coords:
+                        coord_list = str(coord).split(',')
+                        disc_num = int(float(coord_list[-1]))
+                        coord_2d = '[' + str(coord_list[2]) + ',' + str(coord_list[1]) + ']'#  2D comparison of the models
+                        if disc_num > 11:
+                            print('More than 11 discs are visible')
+                            print('Disc number', disc_num)
+                            if disc_num == last_referred_disc + 1:  # Check if all the previous discs were also implemented
+                                lines.append(subject_name + ' ' + contrast + ' ' + str(disc_num) + ' ' + coord_2d + ' ' + 'None' + ' ' + 'None' + '\n')
+                                last_referred_disc = disc_num
+                            else:
+                                for i in range(disc_num - last_referred_disc - 1):
+                                    lines.append(subject_name + ' ' + contrast + ' ' + str(last_referred_disc + 1 + i) + ' ' + 'None' + ' ' + 'None' + ' ' + 'None' + '\n')
+                                lines.append(subject_name + ' ' + contrast + ' ' + str(disc_num) + ' ' + coord_2d + ' ' + 'None' + ' ' + 'None' + '\n')
+                                last_referred_disc = disc_num
                         else:
-                            for i in range(disc_num - last_referred_disc - 1):
-                                lines.append(subject_name + ' ' + contrast + ' ' + str(last_referred_disc + 1 + i) + ' ' + 'None' + ' ' + 'None' + ' ' + 'None' + '\n')
-                            lines.append(subject_name + ' ' + contrast + ' ' + str(disc_num) + ' ' + coord_2d + ' ' + 'None' + ' ' + 'None' + '\n')
+                            lines[disc_num-1] = subject_name + ' ' + contrast + ' ' + str(disc_num) + ' ' + coord_2d + ' ' + 'None' + ' ' + 'None' + '\n'
                             last_referred_disc = disc_num
-                    else:
-                        lines[disc_num-1] = subject_name + ' ' + contrast + ' ' + str(disc_num) + ' ' + coord_2d + ' ' + 'None' + ' ' + 'None' + '\n'
-                        last_referred_disc = disc_num
                 with open("prepared_data/discs_coords.txt","a") as f:
                     f.writelines(lines)
             #sct_coords[subject_name] = discs_coords
@@ -147,24 +158,33 @@ def test_hourglass(args):
 
         
         # Write the predicted and ground truth coordinates inside the discs_coords txt file
-        gt_coord = torch.tensor(gt_coord).tolist()
-        subject_index = np.where((np.array(split_lines)[:,0] == subject_name[0]) & (np.array(split_lines)[:,1] == contrast)) 
-        nb_discs_gt = len(gt_coord) 
+        pred = centers[1:] #0 for background
+        pred = np.flip(pred[pred[:, 0].argsort()], axis=0)  # Sorting predictions according to first coordinate
+        gt_coord = np.array(torch.tensor(gt_coord).tolist())
+        gt_coord = np.transpose(np.array([gt_coord[:,2],gt_coord[:,1],gt_coord[:,-1]])) # Using same format as prediction + discs label
+        subject_index = np.where((np.array(split_lines)[:,0] == subject_name[0]) & (np.array(split_lines)[:,1] == contrast))  
         start_index = subject_index[0][0]  # Getting the first line in the txt file
-        centers = centers[-centers[:, 0].argsort()]  # Sorting centers according to first coordinate
-        if nb_discs_gt != centers.shape[0]:
-            print('Hourglass found more discs than ground truth')
-        else:
-            for i in range(len(gt_coord)):
-                num_disc = gt_coord[i][-1]
-                split_lines[start_index + (num_disc-1)][4] = '[' + str("{:.1f}".format(centers[i][0])) + ',' + str("{:.1f}".format(centers[i][1])) + ']'
-                split_lines[start_index + (num_disc-1)][5] = '[' + str(gt_coord[i][2]) + ',' + str(gt_coord[i][1]) + ']' + '\n'  # [31, 176, 204, 2] --> [204,176]
-            
-            for num in range(len(split_lines)):
-                file_lines[num] = ' '.join(split_lines[num])
+        
+        pred, gt = best_disc_association(pred=pred, gt=gt_coord)
+        for i in range(len(pred)):
+            pred_coord = pred[i] if pred[i]!=0 else 'Fail'
+            gt_coord = gt[i] if gt[i]!=0 else 'None'
+            if pred_coord != 'Fail':
+                split_lines[start_index + i][4] = '[' + str("{:.1f}".format(pred_coord[0])) + ',' + str("{:.1f}".format(pred_coord[1])) + ']'
+            elif gt_coord == 'None':
+                split_lines[start_index + i][4] = 'None'
+            else:
+                split_lines[start_index + i][4] = 'Fail'
+            if gt_coord != 'None':
+                split_lines[start_index + i][5] = '[' + str(gt_coord[0]) + ',' + str(gt_coord[1]) + ']' + '\n'
+            else:
+                split_lines[start_index + i][5] = 'None' + '\n'
                 
-            with open("prepared_data/discs_coords.txt","w") as f:
-                f.writelines(file_lines)  
+        for num in range(len(split_lines)):
+            file_lines[num] = ' '.join(split_lines[num])
+            
+        with open("prepared_data/discs_coords.txt","w") as f:
+            f.writelines(file_lines)  
         
         # prediction_coordinates(prediction, gt_coord, metrics)
         
@@ -270,7 +290,113 @@ def prediction_coordinates(final, coord_gt, metrics):
     metrics['faux_pos'].append(fp)
     metrics['faux_neg'].append(fn)
     
+# looks for the closest points between real and predicted
+def closest_node(node, nodes):
+    nodes1 = np.asarray(nodes)
+    dist_2 = np.sum((nodes1 - node) ** 2, axis=1)
+    return np.argmin(dist_2), dist_2
+
+# looks for the best association between ground truth and predicted discs
+def best_disc_association(pred, gt):
+    '''
+    pred: numpy array of the coordinate of M discs
+    gt: numpy array of the coordinate of N discs + num of the discs
+    Note: M and N can be different
+    
+    return: Two lists (pred, gt) with the same length L corresponding to the biggest disc number in
+    ground truth: L = gt[:,-1].max()
+    '''
+    M = pred.shape[0]
+    N = gt.shape[0]
+    L = gt[:,-1].max()
+    pred_out, gt_out = [0]*L, [0]*L
+    #if N >= M:
+    dist_m = []
+    for m in range(M):
+        dist_m.append(np.sum((gt[:,:2] - pred[m]) ** 2, axis=1))
+    dist_m = np.array(dist_m)
+    ref_coord = []
+    for n in range(N):
+        disc_num = gt[n,-1]
+        closer_to_node_n = np.argmin(dist_m[:,n])
+        ref_coord.append([disc_num, closer_to_node_n, dist_m[closer_to_node_n,n]])
+    ref_coord = np.array(ref_coord)
+    new_ref_coord = []
+    pred_coord_list = []
+    for i in ref_coord:
+        node_repetition = np.where((ref_coord[:,1]==i[1]))
+        node = node_repetition[0][0]
+        min_dist_node = ref_coord[node,2]
+        if len(node_repetition[0]) > 1:
+            for j in node_repetition[0][1:]:
+                if ref_coord[j,2]<min_dist_node:
+                    min_dist_node = ref_coord[j,2]
+                    node = j
+        if ref_coord[node,1] not in pred_coord_list:
+            new_ref_coord.append(ref_coord[node])
+            pred_coord_list.append(ref_coord[node,1])
+    if len(pred_coord_list)<M:  # Every prediction point is not referenced
+        for k in range(M):
+            if k not in pred_coord_list:
+                node, dist = closest_node(pred[k],gt[:,:2])
+                closest_disc_num = gt[node,-1]
+                if (closest_disc_num + 1) not in new_ref_coord[:][0]:
+                    disc_num = closest_disc_num + 1
+                    new_ref_coord.append([disc_num, k, dist])
+                    
+                elif (closest_disc_num - 1) not in new_ref_coord[:][0]:
+                    disc_num = closest_disc_num - 1
+                    new_ref_coord.append([disc_num, k, dist])
+                    
+                else:
+                    print('Prediction disc error: discs might be misplaced, check disc:',closest_disc_num)
+                
+        
+    if M > N: # TODO check this condition
+        print('More discs detected by hourglass')
+        print('nb_gt', N)
+        print('nb_hourglass', M)
+        print('PLZ CHECK THE SCRIPT')
+        for j in range(M):
+            if j not in new_ref_coord[:,1]: # Let's assume it's an extremity disc
+                closest_gt, dist = closest_node(pred[j],gt[:,:2])
+                if pred[j][0] < gt[closest_gt][0]:
+                    disc_num = gt[closest_gt][-1] + 1
+                    np.append(ref_coord,np.array([disc_num, j, dist]))
+                else:
+                    disc_num = gt[closest_gt][-1] - 1
+                    if disc_num >= 1:
+                        np.append(ref_coord,np.array([disc_num, j, dist]))
+                    else:
+                        print('Impossible disc prediction')
+        for n in range(N):
+            disc_num = int(gt[n,-1])
+            gt_out[disc_num-1]=gt[n].tolist()
+    else:
+        
+        for i in range(len(gt)):
+            disc_num = gt[i][-1]
+            gt_out[disc_num-1] = gt[i].tolist()
+        
+    for disc_num, closer_to_node_n, dist_m in new_ref_coord:
+        disc_num = int(disc_num)
+        closer_to_node_n = int(closer_to_node_n)      
+        pred_out[disc_num-1]=pred[closer_to_node_n].tolist()
+            
+    return pred_out, gt_out
+            
+                    
+        
+        
+    
 def compare_methods(args):
+    contrast = CONTRAST[args.modality]
+    txt_file_path = args.comp_txt_file
+    
+    # Load disc_coords txt file
+    with open(txt_file_path,"r") as f:  # Checking already processed subjects from coords.txt
+        file_lines = f.readlines()
+        split_lines = [line.split(' ') for line in file_lines]
     
     return
 
