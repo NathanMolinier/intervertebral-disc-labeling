@@ -28,7 +28,8 @@ def test_sct_label_vertebrae(args):
     Use sct_deepseg_sc and sct_label_vertebrae to find the vertebrae discs coordinates and append them
     to a txt file
     '''
-    with open("prepared_data/discs_coords.txt","r") as f:  # Checking already processed subjects from coords.txt
+    txt_file = args.out_txt_file
+    with open(txt_file,"r") as f:  # Checking already processed subjects from coords.txt
         file_lines = f.readlines()
         processed_subjects_with_contrast = [line.split(' ')[0] + '_' + line.split(' ')[1] for line in file_lines[1:]]  # Remove first line
         
@@ -93,7 +94,7 @@ def test_sct_label_vertebrae(args):
                         else:
                             lines[disc_num-1] = subject_name + ' ' + contrast + ' ' + str(disc_num) + ' ' + coord_2d + ' ' + 'None' + ' ' + 'None' + '\n'
                             last_referred_disc = disc_num
-                with open("prepared_data/discs_coords.txt","a") as f:
+                with open(txt_file,"a") as f:
                     f.writelines(lines)
             #sct_coords[subject_name] = discs_coords
     #return sct_coords
@@ -102,6 +103,7 @@ def test_sct_label_vertebrae(args):
 def test_hourglass(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     contrast = CONTRAST[args.modality]
+    txt_file = args.out_txt_file
     
     print('load image')               
     with open(f'{args.hg_datapath}_test_{args.modality}', 'rb') as file_pi:
@@ -139,7 +141,7 @@ def test_hourglass(args):
     model.eval()
     
     # Load disc_coords txt file
-    with open("prepared_data/discs_coords.txt","r") as f:  # Checking already processed subjects from coords.txt
+    with open(txt_file,"r") as f:  # Checking already processed subjects from coords.txt
         file_lines = f.readlines()
         split_lines = [line.split(' ') for line in file_lines]
     
@@ -183,7 +185,7 @@ def test_hourglass(args):
         for num in range(len(split_lines)):
             file_lines[num] = ' '.join(split_lines[num])
             
-        with open("prepared_data/discs_coords.txt","w") as f:
+        with open(txt_file,"w") as f:
             f.writelines(file_lines)  
         
         # prediction_coordinates(prediction, gt_coord, metrics)
@@ -385,23 +387,9 @@ def best_disc_association(pred, gt):
             
     return pred_out, gt_out
             
-                    
-        
-        
-    
-def compare_methods(args):
-    contrast = CONTRAST[args.modality]
-    txt_file_path = args.comp_txt_file
-    
-    # Load disc_coords txt file
-    with open(txt_file_path,"r") as f:  # Checking already processed subjects from coords.txt
-        file_lines = f.readlines()
-        split_lines = [line.split(' ') for line in file_lines]
-    
-    return
 
 if __name__=='__main__':
-    parser = argparse.ArgumentParser(description='Verterbal disc labeling using pose estimation')
+    parser = argparse.ArgumentParser(description='Extract discs coords from sct and hourglass')
 
     ## Parameters
     parser.add_argument('--hg_datapath', type=str,
@@ -410,26 +398,13 @@ if __name__=='__main__':
                         help='SCT dataset path')                               
     parser.add_argument('-c', '--modality', type=str, metavar='N', required=True,
                         help='Data modality')
-    parser.add_argument('-txt', '--comp_txt_file', default=None, type=str, metavar='N',
-                        help='Data modality')                                                                                                
-
-    parser.add_argument('--njoints', default=11, type=int,
-                        help='Number of joints')
-    parser.add_argument('--resume', default= False, type=bool,
-                        help=' Resume the training from the last checkpoint') 
-    parser.add_argument('--att', default= True, type=bool,
-                        help=' Use attention mechanism') 
-    parser.add_argument('--stacks', default=2, type=int, metavar='N',
-                        help='Number of hourglasses to stack')
-    parser.add_argument('-b', '--blocks', default=1, type=int, metavar='N',
-                        help='Number of residual modules at each location in the hourglass')
+    parser.add_argument('-txt', '--out_txt_file', default='prepared_data/discs_coords.txt', type=str, metavar='N',
+                        help='Generated txt file')                                                                                                
     
-    if parser.parse_args().comp_txt_file != None:
-        compare_methods(parser.parse_args())
-    else:
-        if not os.path.exists('prepared_data/discs_coords.txt'):
-            with open("prepared_data/discs_coords.txt","w") as f:
-                f.write("subject_name contrast num_disc sct_discs_coords hourglass_coords gt_coords\n")
+    if not os.path.exists(parser.parse_args().out_txt_file):
+        print("Creating txt file:", parser.parse_args().out_txt_file)
+        with open(parser.parse_args().out_txt_file,"w") as f:
+            f.write("subject_name contrast num_disc sct_discs_coords hourglass_coords gt_coords\n")
 
-        test_sct_label_vertebrae(parser.parse_args())
-        test_hourglass(parser.parse_args())
+    test_sct_label_vertebrae(parser.parse_args())
+    test_hourglass(parser.parse_args())
