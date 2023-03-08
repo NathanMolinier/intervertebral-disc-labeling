@@ -23,6 +23,26 @@ def mesure_err_disc(gt, pred):
         dis.append(np.linalg.norm(node - pred[h]))
     return dis
 
+def compute_L2_error(gt, pred):
+    '''
+    gt: numpy array with the ground truth coords of the discs
+    pred: numpy array with the prediction coords of the discs
+    
+    out: L2_error for each coordinate or:
+        -1 if not coordinate for gt
+        -2 if prediction fails
+    '''
+    L2_list = []
+    for i in range(gt.shape[0]):
+        if gt[i,0] != -1:
+            if pred[i,0] != -1:
+                L2_list.append(np.linalg.norm(gt[i] - pred[i]))
+            else:
+                L2_list.append(-2)
+        else:
+            L2_list.append(-1)
+    return np.array(L2_list)
+
 
 # compute error along the z axis between real and prediction with the closest node.
 def mesure_err_z(gt, pred):
