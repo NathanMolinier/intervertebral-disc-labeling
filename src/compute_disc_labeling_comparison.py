@@ -31,6 +31,8 @@ def compare_methods(args):
     methods_results = {} 
     l2_mean_hg = []
     l2_mean_sct = []
+    fail_hg = []
+    fail_sct = []
     for subject in processed_subjects:
         # Convert str coords to numpy array
         discs_list = np.extract(split_lines[:,0] == subject,split_lines[:,2]).astype(int)
@@ -70,28 +72,34 @@ def compare_methods(args):
         
         l2_mean_hg.append(L2_hourglass_mean)
         l2_mean_sct.append(L2_sct_mean)
+        fail_hg.append(fail_detection_hg)
+        fail_sct.append(fail_detection_sct)
     
     # set width of bar
     barWidth = 0.25
-    fig = plt.subplots(figsize =(30, 10))
+    fig = plt.subplots(figsize =(30, 4))
     
     # Set position of bar on X axis
     br1 = np.arange(len(processed_subjects))
     br2 = [x + barWidth for x in br1]
     
     # Make the plot        
-    plt.bar(br1, l2_mean_sct, color='r', width = barWidth, edgecolor ='grey', label ='SCT_label_vertebrae')
-    plt.bar(br2, l2_mean_hg, color='b', width = barWidth, edgecolor ='grey', label ='Hourglass_network')
+    # plt.bar(br1, l2_mean_sct, color='r', width = barWidth, edgecolor ='grey', label ='SCT_label_vertebrae')
+    # plt.bar(br2, l2_mean_hg, color='b', width = barWidth, edgecolor ='grey', label ='Hourglass_network')
+    plt.bar(br1, fail_sct, color='r', width = barWidth, edgecolor ='grey', label ='SCT_label_vertebrae')
+    plt.bar(br2, fail_hg, color='b', width = barWidth, edgecolor ='grey', label ='Hourglass_network')
+     
     
     # Create axis and adding Xticks
-    plt.xlabel('Subjects', fontweight ='bold', fontsize = 15)
-    plt.ylabel('L2_error (pixels)', fontweight ='bold', fontsize = 15)
+    # plt.xlabel('Subjects', fontweight ='bold', fontsize = 15)
+    # plt.ylabel('L2_error (pixels)', fontweight ='bold', fontsize = 15)
+    plt.ylabel('Fail detections', fontweight ='bold', fontsize = 15)
     plt.xticks([r + barWidth/2 for r in range(len(processed_subjects))], processed_subjects)
     
     # Show plot
     plt.legend()
     plt.show()
-    plt.savefig('prepared_data/l2_error.png')        
+    plt.savefig('prepared_data/fail_detection.png')        
                 
 
     return
