@@ -1,4 +1,4 @@
-> ⚠️‎‎‎ **A more recent and actively-maintained version of this code is available in [ivadomed](https://ivadomed.org/)**
+> ⚠️‎‎‎ **A more recent and actively-maintained version of this code is available in [spinalcordtoolbox](https://github.com/spinalcordtoolbox/disc-labeling-hourglass)**
 
 # [Stacked Hourglass Network with a Multi-level Attention Mechanism: Where to Look for Intervertebral Disc Labeling]()
 
